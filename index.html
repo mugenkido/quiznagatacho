@@ -83,7 +83,7 @@ function launchConfetti(){
 
 /* === STORAGE === */
 const store={
-  _d:{totalCorrect:0,hasSeenIntro:false},
+  _d:{totalCorrect:0,hasSeenIntro:false,correctIds:[]},
   load(){try{const s=localStorage.getItem('pq_v2');if(s)this._d=JSON.parse(s)}catch(e){}},
   save(){try{localStorage.setItem('pq_v2',JSON.stringify(this._d))}catch(e){}},
   get(k){return this._d[k]},
@@ -153,11 +153,22 @@ function TopPage({data,onStart,totalCorrect}){
       </div>
 
       <div className="slide-up" style={{display:'flex',flexDirection:'column',gap:12}}>
-        <button className="btn btn-primary" onClick={()=>onStart(shuffle(data))} style={{width:'100%',padding:'18px',fontSize:16}}>
-          🎯 全問チャレンジ（{data.length}問）
-        </button>
-        <button className="btn" onClick={()=>onStart(shuffle(data).slice(0,10))} style={{width:'100%',padding:'16px',fontSize:15}}>
+        <button className="btn btn-primary" onClick={()=>onStart(shuffle(data).slice(0,10))} style={{width:'100%',padding:'18px',fontSize:16}}>
           🎲 ランダム10問
+        </button>
+        {(()=>{
+          const ids=store.get('correctIds')||[];
+          const unsolved=data.filter(q=>!ids.includes(q.id));
+          return unsolved.length>0&&unsolved.length<data.length?(
+            <button className="btn" onClick={()=>onStart(shuffle(unsolved).slice(0,Math.min(unsolved.length,10)))} style={{width:'100%',padding:'16px',fontSize:15}}>
+              ❓ 未正解のみ（残り{unsolved.length}問）
+            </button>
+          ):unsolved.length===0?(
+            <div style={{textAlign:'center',padding:'12px',fontSize:13,color:'var(--correct)'}}>🎉 全問正解済み！</div>
+          ):null;
+        })()}
+        <button className="btn" onClick={()=>onStart(shuffle(data))} style={{width:'100%',padding:'14px',fontSize:14,color:'var(--text-sub)'}}>
+          🎯 全問チャレンジ（{data.length}問）
         </button>
       </div>
     </div>
@@ -165,7 +176,7 @@ function TopPage({data,onStart,totalCorrect}){
 }
 
 /* === QUIZ PAGE === */
-function QuizPage({questions,onFinish}){
+function QuizPage({questions,onFinish,onQuit}){
   const[current,setCurrent]=useState(0);
   const[selected,setSelected]=useState(null);
   const[answers,setAnswers]=useState([]);
@@ -182,6 +193,10 @@ function QuizPage({questions,onFinish}){
     if(current<questions.length-1)setCurrent(current+1);
     else onFinish([...answers]);
   };
+  const handleQuit=()=>{
+    if(answers.length>0)onFinish([...answers]);
+    else onQuit();
+  };
   const isCorrect=selected===q.answer;
   const pct=((current+(selected!==null?1:0))/questions.length)*100;
 
@@ -190,7 +205,10 @@ function QuizPage({questions,onFinish}){
       <div style={{marginBottom:24}}>
         <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:8}}>
           <span style={{fontSize:13,color:'var(--text-sub)'}}><span style={{color:'var(--gold)',fontWeight:700}}>{current+1}</span> / {questions.length}</span>
-          <span style={{fontSize:11,padding:'3px 10px',borderRadius:20,border:'1px solid var(--gold)',color:'var(--gold-light)',background:'rgba(212,168,67,.15)'}}>{q.type}</span>
+          <div style={{display:'flex',alignItems:'center',gap:10}}>
+            <span style={{fontSize:11,padding:'3px 10px',borderRadius:20,border:'1px solid var(--gold)',color:'var(--gold-light)',background:'rgba(212,168,67,.15)'}}>{q.type}</span>
+            <button onClick={handleQuit} style={{fontSize:11,padding:'3px 10px',borderRadius:20,border:'1px solid var(--card-border)',color:'var(--text-dim)',background:'transparent',cursor:'pointer',fontFamily:'inherit'}}>✕ やめる</button>
+          </div>
         </div>
         <div className="progress-bar"><div className="progress-fill" style={{width:pct+'%'}}/></div>
       </div>
@@ -353,6 +371,10 @@ function App(){
     const newTotal=totalCorrect+newCorrect;
     setTotalCorrect(newTotal);
     store.set('totalCorrect',newTotal);
+    // Track solved question IDs
+    const ids=store.get('correctIds')||[];
+    const newIds=[...new Set([...ids,...ans.filter(a=>a.isCorrect).map(a=>a.id)])];
+    store.set('correctIds',newIds);
     setAnswers(ans);
     setScreen('result');
     window.scrollTo(0,0);
@@ -364,7 +386,7 @@ function App(){
     <>
       {screen==='intro'&&<IntroPage onDone={handleIntroDone}/>}
       {screen==='top'&&<TopPage data={QUIZ_DATA} onStart={handleStart} totalCorrect={totalCorrect}/>}
-      {screen==='quiz'&&<QuizPage questions={questions} onFinish={handleFinish}/>}
+      {screen==='quiz'&&<QuizPage questions={questions} onFinish={handleFinish} onQuit={handleHome}/>}
       {screen==='result'&&<ResultPage answers={answers} totalCorrect={totalCorrect} prevRank={prevRank} onRestart={handleRestart} onHome={handleHome}/>}
     </>
   );
